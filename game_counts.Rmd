@@ -1,0 +1,289 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Introduction
+
+## Background
+
+Every year since 1995, citizen scientists gather for a weekend in September at the floodplain (the pools area) of the Mana Pools National Park and perform transects, with the goal of counting the number of animals of specific species in this pools area of the park. Counts are done in the mornings and the afternoons of the Saturday and Sunday. 
+
+## Area
+
+The Mana Pools National Park is located in Northern Zimbabwe against the Zambezi river. The park itself is 219600ha and is home to a large variety of game animals, including the big 5. A 4500ha area of the park is made up of a floodplain (the pools area) which retains water better than the rest of the park and generally has more lush vegetation. 
+
+## Data available
+
+The data available is present in 3 datasets The first contains the counts of animal species found as a result of the aforementioned transects. Species counted are: elephant, buffalo, eland, zebra, waterbuck, kudu, impala, nyala, bushbuck, wild dog, lion, leopard, hyena, jackal, warthog and baboon. Counts are separated according to day and time of day. The second and third datasets are for climatic and vegetation conditions for the 219600ha park and the 4500ha pools area, respectively. The frequency of this climatic and vegetation data is monthly.
+
+## study objectives
+
+The primary object of this study is to display my proficiency with wrangling and presenting data using R, thus any correlations that are determined are for interests sake alone. That being said, I plan to study the correlations between game animals present and the amount of precipitation which fell during the previous wet season in the park and pools area, and the correlations between game animals present and various park and pools climatic and vegetation and factors present in the dry season leading up to each game count. Considering that the pools area retains water better and produces better quality vegetation than the rest of the park, and that animals will migrate locally to find better feeding and drinking resources, I expect that one will see that animal counts will vary according to yearly climatic and vegetation scores (increasing with better food and water resources at the pools and poorer food and water resources in the rest of the park and vice-versa).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Table importing and cleaning
+
+Installing the tidyverse
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+Importing the game count df (gc), the park climatic data (pad) df, and the pools climatic data (roi) df.
+
+```{r}
+gc <- read_csv('C:/Users/chris/Desktop/Coding/R_work/Projects/Game_counts/game_counts.csv')
+pad <- read_csv('C:/Users/chris/Desktop/Coding/R_work/Projects/Game_counts/PARK_additional_data.csv')
+roi <- read_csv('C:/Users/chris/Desktop/Coding/R_work/Projects/Game_counts/ROI_additional_data.csv')
+gc
+```
+
+Fortunately gc was small enough to take a quick scan through it. I noticed that in one year the Saturday and Sunday were recorded in shorthand ('Sat' and 'Sun'), so I converted them to Saturday and Sunday.
+
+```{r}
+gc <- gc %>% mutate(Day = recode(Day, 'Sun'= 'Sunday', 'Sat'='Saturday'))
+gc
+```
+
+As I'm interested in the total counts per year, I could collapse the counts for Saturdays and Sundays, and am and pm into single counts representing each year, this df I called gc_yearly. I then removed all carnivores, warthog and baboon as I'm interested in animals that will locally migrate to and from the pools area, and carnivores, baboons and warthogs generally have well defined territories and so won't migrate locally. I then multiplied the number of animals of a species by the species LSU (large stock unit). This gives a more realistic relative pressure of each species on the environment (a factor to consider when adding species to make additional categories, such as browsers). I then added columns which summate the grazers, browsers and angostic herbivores, as these herbivore types use different vegetation types (grass, trees and shrubs, or both, respectively). 
+
+```{r}
+gc_yearly <- gc %>% group_by(Year) %>% summarize(Elephant=sum(Elephant, na.rm=TRUE), Buffalo=sum(Buffalo, na.rm=TRUE), Eland=sum(Eland, na.rm=TRUE), Zebra=sum(Zebra, na.rm=TRUE), Waterbuck=sum(Waterbuck, na.rm=TRUE), Kudu=sum(Kudu, na.rm=TRUE), Impala=sum(Impala, na.rm=TRUE), Nyala=sum(Nyala, na.rm=TRUE), Bushbuck=sum(Bushbuck, na.rm=TRUE), Wild_dog=sum(`Wild dog`, na.rm=TRUE),  Lion=sum(Lion, na.rm=TRUE), Leopard=sum(Leopard, na.rm=TRUE), Hyena=sum(Hyena, na.rm=TRUE), Jackal=sum(Jackal, na.rm=TRUE), Warthog=sum(Warthog, na.rm=TRUE), Baboon=sum(Baboon, naA.rm=TRUE))
+
+gc_yearly <- gc_yearly %>% select(Year, Elephant, Buffalo, Eland, Zebra, Waterbuck, Kudu, Nyala, Bushbuck, Impala)
+
+gc_yearly <- gc_yearly %>% mutate(Elephant=Elephant*10, Buffalo=Buffalo*1.07, Eland=Eland*1.08, Zebra=Zebra*0.66, Waterbuck=Waterbuck*0.5, Kudu=Kudu*0.54, Nyala=Nyala*0.23, Bushbuck=Bushbuck*0.13, Impala=Impala*0.19)
+
+gc_yearly <- gc_yearly %>% mutate(Grazers = Buffalo + Zebra, Browsers = Kudu + Bushbuck, Agnostic = Elephant + Eland + Waterbuck + Nyala + Impala)
+
+gc_yearly
+
+```
+
+I then looked at the pad df.
+
+```{r}
+pad
+```
+
+I renamed the columns to their full names and dropped the columns which are irrelevant to the study. I then used the date column to create a Year column and a Month column. As the game counts occurred in the beginning of September every year, I added two columns which gave an altered Year and Month value such that the Year_altered and Month_altered columns ran from September to August. This would make it easier to group climatic data for the periods before game counts were done.
+
+```{r}
+pad <- pad %>% rename(Actual_evapotranspiration=aet,
+                      Climate_water_deficit=def,
+                      Palmer_drought_severity_index=pdsi,
+                      Predicted_evapotranspiration=pet,
+                      Precipitation=pr,
+                      Runoff=ro,
+                      Soil_moisture=soil,
+                      Surface_radiation=srad,
+                      Snow_water_Equivalent=swe,
+                      Min_temp=tmmn,
+                      Max_temp=tmmx,
+                      Vapor_pressure=vap,
+                      Vapor_pressure_deficit=vpd,
+                      Wind_speed=vs,
+                      Normalized_diff_veg_index=NDVI,
+                      Enhanced_veg_index=EVI,
+                      Water=water)
+pad <- pad %>% select(c(1,4,6,8,16,17,18))
+pad <- pad %>% mutate(Year=year(date),Month=month(date))
+pad <- pad %>% select(c(2,3,4,5,6,7,8,9))
+pad <- pad %>% mutate(Year_altered=lead(Year, n=4))
+pad <- pad %>% mutate(Month_altered=lead(Month,n=4))
+pad
+              
+```
+
+I then applied to roi what I had applied to pad.
+
+```{r}
+roi <- roi %>% rename(Actual_evapotranspiration=aet,
+                      Climate_water_deficit=def,
+                      Palmer_drought_severity_index=pdsi,
+                      Predicted_evapotranspiration=pet,
+                      Precipitation=pr,
+                      Runoff=ro,
+                      Soil_moisture=soil,
+                      Surface_radiation=srad,
+                      Snow_water_Equivalent=swe,
+                      Min_temp=tmmn,
+                      Max_temp=tmmx,
+                      Vapor_pressure=vap,
+                      Vapor_pressure_deficit=vpd,
+                      Wind_speed=vs,
+                      Normalized_diff_veg_index=NDVI,
+                      Enhanced_veg_index=EVI,
+                      Water=water)
+roi <- roi %>% select(c(1,4,6,8,16,17,18))
+roi <- roi %>% mutate(Year=year(date),Month=month(date))
+roi <- roi %>% select(c(2,3,4,5,6,7,8,9))
+roi <- roi %>% mutate(Year_altered=lead(Year, n=4))
+roi <- roi %>% mutate(Month_altered=lead(Month,n=4))
+roi
+              
+```
+
+I then found the total precipitation for the prior wet season (Months_altered 2 to 9, annually) and the Palmer_drought_severity_index, Soil_moisture, Enhanced_veg_index and Water for the 3 months prior to the game count (Months_altered 10 to 12, annually). These new dfs were named pad_wet_precip and pad_dry_clim, respectively for the park data and roi_wet_precip and roi_dry_clim, respectively for the pools data. To these dfs I added a column to represent the area the df was referring to to (i.e. pools or park).
+
+```{r}
+pad_wet_precip <- pad %>% filter(Month_altered >= 2 & Month_altered <= 9) %>% group_by(Year_altered) %>% summarise(Precipitation=sum(Precipitation)) %>% mutate(Area='park') %>% rename(Year=Year_altered)
+pad_dry_clim <- pad %>% filter(Month_altered==10|Month_altered==11|Month_altered==12) %>% group_by(Year_altered) %>% summarize(Palmer_drought_severity_index = sum(Palmer_drought_severity_index), Soil_moisture=sum(Soil_moisture), Enhanced_veg_index=sum(Enhanced_veg_index), Water=sum(Water)) %>% mutate(Area='park') %>% rename(Year=Year_altered)
+
+roi_wet_precip <- roi %>% filter(Month_altered >= 2 & Month_altered <= 9) %>% group_by(Year_altered) %>% summarise(Precipitation=sum(Precipitation)) %>% mutate(Area='pools') %>% rename(Year=Year_altered)
+roi_dry_clim <- roi %>% filter(Month_altered==10|Month_altered==11|Month_altered==12) %>% group_by(Year_altered) %>% summarize(Palmer_drought_severity_index = sum(Palmer_drought_severity_index), Soil_moisture=sum(Soil_moisture), Enhanced_veg_index=sum(Enhanced_veg_index), Water=sum(Water)) %>% mutate(Area='pools') %>% rename(Year=Year_altered)
+
+pad_wet_precip
+pad_dry_clim
+roi_wet_precip
+roi_dry_clim
+```
+
+I then merged pad_wet_precip and roi_wet_precip, and pad_dry_clim and roi_dry_clim. These dfs were called wet_precip and dry_clim, respectively.
+
+```{r}
+wet_precip <- pad_wet_precip %>% full_join(roi_wet_precip) %>% arrange(Year)
+wet_precip
+
+dry_clim <- pad_dry_clim %>% full_join(roi_dry_clim) %>% arrange(Year)
+dry_clim
+
+```
+I then merged  gc_yearly and wet_precip to make gc_precip and gc_yearly and dry_clim to make gc_clim
+
+```{r}
+gc_precip <- gc_yearly %>% full_join(wet_precip)
+gc_clim <- gc_yearly %>% full_join(dry_clim)
+gc_precip
+gc_clim
+```
+
+Incase the y axis scales needed for graphs resulted in difficulty seeing the trends in some species/groups while encompassing other species/groups. I also created a table with species/group column normalized as a percentage of the maximum value for the species/group seeing in a single year.
+
+```{r}
+
+gc_max <- gc_yearly %>% summarize(across(2:13, max)) %>% mutate(Year=100) %>% relocate(Year) 
+gc_max <- gc_max %>% slice(rep(1:n(), each=20))
+gc_yearly_norm <- gc_yearly/gc_max*100
+
+gc_norm_precip <- gc_yearly_norm %>% full_join(wet_precip)
+gc_norm_clim <- gc_yearly_norm %>% full_join(dry_clim)
+
+```
+
+
+# Data analysis
+
+## Correlation between precipitation and animal counts
+
+I graphed park and pools precipitations against LSU values for each species, and park and pools precipitations against LSU values for each herbivore type.
+
+```{r}
+gc_precip_for_spp_plot <- gc_precip %>% gather(c(2,3,4,5,6,7,8,9,10), key='Species', value='Count')
+
+ggplot(data=filter(gc_precip_for_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Species)) + ggtitle('Species counts vs park precipitation') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_precip_for_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Species)) + ggtitle('Species counts vs pools precipitation') + theme(plot.title = element_text(hjust = 0.5))
+
+gc_precip_for_type_plot <- gc_precip %>% gather(c(11,12,13), key='Herbivore_type', value='Count')
+
+ggplot(data=filter(gc_precip_for_type_plot, Area=="park")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs park precipitation') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_precip_for_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs pools precipitation') + theme(plot.title = element_text(hjust = 0.5))
+```
+I then graphed the park and pools precipitations against the normalized LSU values for each species, and park and pools precipitations against the normalized LSU values for each herbivore type.
+
+```{r}
+gc_precip_norm_spp_plot <- gc_norm_precip %>% gather(c(2,3,4,5,6,7,8,9,10), key='Species', value='Count')
+
+ggplot(data=filter(gc_precip_norm_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Species)) + facet_wrap(~Species) + ggtitle('Normalized species counts vs park precipitation') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_precip_norm_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Species)) + facet_wrap(~Species) + ggtitle('Normalized species counts vs pools precipitation') + theme(plot.title = element_text(hjust = 0.5))
+
+gc_precip_norm_type_plot <- gc_norm_precip %>% gather(c(11,12,13), key='Herbivore_type', value='Count')
+
+ggplot(data=filter(gc_precip_norm_type_plot, Area=="park")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs park precipitation') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_precip_norm_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Precipitation, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs pools precipitation') + theme(plot.title = element_text(hjust = 0.5))
+```
+ 
+
+
+## Correlation between soil moisture, drought index, vegetation, and water, and animal counts
+
+I then graphed park and pools dry season climatic factors against LSU values for each species, and park and pools climatic factors against LSU values for each herbivore type.
+
+```{r}
+gc_clim_for_spp_plot <- gc_clim %>% gather(c(2,3,4,5,6,7,8,9,10), key='Species', value='Count')
+
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Species counts vs park drought index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Species counts vs pools drought index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Species counts vs park soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Species counts vs pools soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="park" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Species counts vs park vegetatation index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="pools" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Species counts vs pools vegetatation index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Water, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Species))+ facet_wrap(~Species) + ggtitle('Species counts vs park water') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Water, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Species counts vs pools water') + theme(plot.title = element_text(hjust = 0.5))
+
+gc_clim_for_type_plot <- gc_clim %>% gather(c(11,12,13), key='Herbivore_type', value='Count')
+
+ggplot(data=filter(gc_clim_for_type_plot, Area=="park")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs park drought index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs pools drought index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_for_type_plot, Area=="park")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs park soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs pools soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_for_type_plot, Area=="park" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs park vegetation index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_type_plot, Area=="pools" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs pools vegetation index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_for_type_plot, Area=="park")) + geom_point(mapping=aes(x=Water, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs park water') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_for_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Water, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Herbivore_type))+ ggtitle('Herbivore type counts vs pools water') + theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+I then graphed park and pools dry season climatic factors against the normalized LSU values for each species, and park and pools climatic factors against the normalized LSU values for each herbivore type.
+
+```{r}
+gc_clim_norm_spp_plot <- gc_norm_clim %>% gather(c(2,3,4,5,6,7,8,9,10), key='Species', value='Count')
+
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Normalized species counts vs park drought index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Normalized species counts vs pools drought index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Normalized species counts vs park soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Species)) + facet_wrap(~Species)+ ggtitle('Normalized species counts vs pools soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="park" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Normalized species counts vs park vegetation index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="pools" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Normalized species counts vs pools vegetation index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="park")) + geom_point(mapping=aes(x=Water, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Normalized species counts vs park water') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_spp_plot, Area=="pools")) + geom_point(mapping=aes(x=Water, y=Count, color=Species)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Species))+ facet_wrap(~Species)+ ggtitle('Normalized species counts vs pools water') + theme(plot.title = element_text(hjust = 0.5))
+
+gc_clim_norm_type_plot <- gc_norm_clim %>% gather(c(11,12,13), key='Herbivore_type', value='Count')
+
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="park")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs park drought index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Palmer_drought_severity_index, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs pools drought index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="park")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs park soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Soil_moisture, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs pools soil moisture') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="park" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs park vegetation index') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="pools" & Enhanced_veg_index > 0)) + geom_point(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Enhanced_veg_index, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs pools vegetation index') + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="park")) + geom_point(mapping=aes(x=Water, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs park water') + theme(plot.title = element_text(hjust = 0.5))
+ggplot(data=filter(gc_clim_norm_type_plot, Area=="pools")) + geom_point(mapping=aes(x=Water, y=Count, color=Herbivore_type)) + geom_smooth(mapping=aes(x=Water, y=Count, color=Herbivore_type))+ ggtitle('Normalized herbivore type counts vs pools water') + theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+# Discussion
+
+## Previous wet season precipitation
+
+The amount of precipitation during the previous wet season did not appear to be strongly correlated with game counts (individual species or herbivore type). This may be due to the large time period between the previous wet season and the game count, variation in climatic factors (such as temperature, wind and solar radiation) during this interim period may have confounded any relationship.
+
+## Soil moisture, drought index, vegetation and water
+
+There did not appear to be any easily discernible correlation between drought index and water, and game counts. Soil moisture may have and a slight negative correlation with agnostic herbivores and browsers, but not for grazers. This correlation was present for both park and pools soil moisture. There was a strongly negative correlation between the enhanced vegetation index (pool and park) and browsers, and a less strong negative correlation between enhanced vegetation index (pool and park) and agnostic herbivores. This appears to indicate that extent of local migrations is more influenced by presence/absence of vegetation than by the presence/absence of water. Please note that although the extent of browsers local migration is more varied, this does not mean that browsers are more likely to migrate depending on water or vegetation. It may be the case that grazers always migrate depending on the season, despite what the climatic or vegetation conditions are, thus resulting in more uniform game counts from year to year. This study only looks at the variation of migratory patterns, not whether species/herbivore groups are more likely to exhibit season local migrations. 
